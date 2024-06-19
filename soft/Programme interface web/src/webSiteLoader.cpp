@@ -1,7 +1,7 @@
 #include "webSiteLoader.h"
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <string.h>
 #include <vector> 
 
@@ -40,12 +40,12 @@ AsyncWebServer* webSiteLoader::load(String indexDirectory){
 }
 
 void webSiteLoader::loadWebSite(AsyncWebServer* server){
-  SPIFFS.begin();
+  LittleFS.begin();
   
 
   int iNumFile = 0;
   std::vector<File> WebFile(1); 
-  WebFile[0] = SPIFFS.open(webSiteFileDirectory,"r");
+  WebFile[0] = LittleFS.open(webSiteFileDirectory,"r");
 
   while(WebFile[0])
   {
@@ -55,7 +55,7 @@ void webSiteLoader::loadWebSite(AsyncWebServer* server){
     if(!(WebFile[iNumFile].isDirectory())){     
       String filename = WebFile[iNumFile].name();
       Serial.println(filename);
-      filename = filename.substring(webSiteFileDirectory.length(),filename.length());
+      filename = "/" + filename;
       if(filename.length()==0){
         Serial.println(filename);
         WebFile[iNumFile].close();//close file
@@ -66,12 +66,13 @@ void webSiteLoader::loadWebSite(AsyncWebServer* server){
         iNumFile--;
       }
       else{
+        Serial.print("create : ");//file load
         Serial.println(filename);//file load
         server->on(filename.c_str(), HTTP_GET, [](AsyncWebServerRequest *request)
         {
           String fileUrl = webSiteFileDirectory + request->url();
           Serial.println(request->url() + " -> " + fileUrl);//file upload
-          request->send(SPIFFS, fileUrl, webSiteLoader::contentTypeSelect(fileUrl));
+          request->send(LittleFS, fileUrl, webSiteLoader::contentTypeSelect(fileUrl));
         });
         
         WebFile[iNumFile].close(); //fclose file
@@ -86,17 +87,19 @@ void webSiteLoader::loadWebSite(AsyncWebServer* server){
   {
     //request->redirect("http://192.168.4.1/index.html");
     Serial.println("First page");
-    request->send(SPIFFS, webSiteLoader::webSiteFileDirectory + "/index.html", webSiteLoader::contentTypeSelect(webSiteLoader::webSiteFileDirectory + "/index.html"));
+    request->send(LittleFS, webSiteLoader::webSiteFileDirectory + "/index.html", webSiteLoader::contentTypeSelect(webSiteLoader::webSiteFileDirectory + "/index.html"));
   });
 
   server->onNotFound([](AsyncWebServerRequest *request){
+    Serial.print("notFound : ");
+    Serial.println(request->url());
     if (!request->host().equals(WiFi.softAPIP().toString())) {
       String message = "http://"  + WiFi.softAPIP().toString() + ("/index.html");
       request->redirect(message);
       return;
     }
     // Votre code de gestion de la page de portail captif ici
-    request->send(SPIFFS, webSiteLoader::webSiteFileDirectory + "/index.html", webSiteLoader::contentTypeSelect(webSiteLoader::webSiteFileDirectory + "/index.html"));
+    request->send(LittleFS, webSiteLoader::webSiteFileDirectory + "/index.html", webSiteLoader::contentTypeSelect(webSiteLoader::webSiteFileDirectory + "/index.html"));
   });
 
 }
@@ -104,6 +107,7 @@ void webSiteLoader::loadWebSite(AsyncWebServer* server){
 
 
 String webSiteLoader::contentTypeSelect(String fileDirectory){
+  Serial.println(fileDirectory);
   String fileType;
   String retContentType;
   int inumDetect = fileDirectory.length()-1;
@@ -181,5 +185,6 @@ String webSiteLoader::contentTypeSelect(String fileDirectory){
   else{
     retContentType = "text/plain";
   } 
+  Serial.println(retContentType);
   return retContentType;
 }
